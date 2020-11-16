@@ -142,7 +142,7 @@ jobs:
 
   deploy-function:
     docker:
-      - image: circleci/node:3.6.6-stretch-browsers
+      - image: circleci/python:3.6.6-stretch-browsers
     steps:
       - <<: *install-environment-requirements
       - <<: *install-kubeless
