@@ -174,7 +174,10 @@ jobs:
             npm i
             npm run build
 
-            kubectl delete --kubeconfig=/home/circleci/.kube/config secret $KUBELESS_FUNCTION_NAME --namespace $K8S_NAMESPACE
+            kubectl delete \
+              --kubeconfig=/home/circleci/.kube/config secret $KUBELESS_FUNCTION_NAME \
+              --namespace $K8S_NAMESPACE \
+              --ignore-not-found
 
             source $BASH_ENV
             env > .env
