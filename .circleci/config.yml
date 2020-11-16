@@ -40,6 +40,7 @@ aliases:
     run:
       name: Install node
       command: |
+        sudo apt-get update
         sudo curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
         sudo apt-get install -y nodejs
 defaults: &defaults
@@ -142,11 +143,10 @@ jobs:
 
   deploy-function:
     docker:
-      - image: circleci/python:3.6.6-stretch-browsers
+      - image: circleci/node:stretch
     steps:
       - <<: *install-environment-requirements
       - <<: *install-kubeless
-      - <<: *install-node
       - checkout
       - run:
           name: "Connect to cluster"
