@@ -136,7 +136,7 @@ jobs:
 
   deploy-function:
     docker:
-      - image: circleci/python:3.6.6-stretch-browsers
+      - image: node:12.19.1-buster-slim
     steps:
       - <<: *install-environment-requirements
       - <<: *install-kubeless
