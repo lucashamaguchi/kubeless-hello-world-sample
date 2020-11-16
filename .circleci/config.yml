@@ -173,6 +173,7 @@ jobs:
           command: |
             npm i
             npm run build
+            kubectl config --kubeconfig=/home/circleci/.kube/config set-context --current --namespace=$K8S_NAMESPACE
             kubeless function deploy $KUBELESS_FUNCTION_NAME --runtime $KUBELESS_RUNTIME --dependencies package.json --handler index.start --from-file dist/index.js
             kubeless trigger kafka create $KUBELESS_FUNCTION_NAME --function-selector created-by=kubeless,function=$KUBELESS_FUNCTION_NAME --trigger-topic $KUBELESS_TOPIC_NAME
 workflows:
