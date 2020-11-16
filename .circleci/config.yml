@@ -1,0 +1,183 @@
+aliases:
+  - &install-environment-requirements
+    run:
+      name: Install environment requirements
+      command: | 
+        sudo apt-get update
+        sudo apt-get install gettext-base
+        sudo curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo chmod +x ./kubectl
+        sudo mv ./kubectl /usr/local/bin/kubectl
+  - &install-python-requirements
+    run:
+      name: Install python requirements
+      command: | 
+        python3.6 -m venv venv
+        echo "source venv/bin/activate" >> $BASH_ENV
+        . venv/bin/activate
+        pip install setuptools --upgrade
+        pip install pytest-cov
+        pip install -r requirements.txt
+  - &test
+    run:
+      name: Tests
+      command: |
+        . venv/bin/activate
+        pytest --cov=./
+        bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
+
+  - &install-kubeless
+    run:
+      name: Install kubeless
+      command: | 
+        export OS=$(uname -s| tr '[:upper:]' '[:lower:]')
+        sudo curl -OL https://github.com/kubeless/kubeless/releases/download/$RELEASE/kubeless_$OS-amd64.zip && \
+          sudo unzip kubeless_$OS-amd64.zip && \
+          sudo mv bundles/kubeless_$OS-amd64/kubeless /usr/local/bin/
+defaults: &defaults
+  docker:
+    - image: circleci/python:3.6.6-stretch-browsers
+    - image: circleci/postgres:9.6-alpine-ram
+      environment:
+        POSTGRES_USER: postgres
+        POSTGRES_DB: app
+        POSTGRES_PASSWORD: postgres
+version: 2
+jobs:
+  test:
+      <<: *defaults
+      steps:
+        - checkout
+        # - setup_remote_docker:
+        #     docker_layer_caching: true
+        - add_ssh_keys:
+            fingerprints:
+              - "ef:ef:77:6f:de:92:8e:dd:0a:19:62:f9:78:b1:21:74"
+        - <<: *install-environment-requirements
+        - <<: *install-python-requirements
+        - <<: *test
+  build:
+    docker:
+      - image: circleci/python:3.6.6-stretch-browsers
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: "Login in to docker hub"
+          command: docker login --username=$DOCKER_HUB_USER --password=$DOCKER_HUB_PASSWORD
+
+      - run:
+          name: "Prepare Environment"
+          command: |
+            if [ ${CIRCLE_BRANCH} == "master" ]
+            then
+              echo "export ENV=production" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            else
+              echo "export ENV=staging" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            fi
+
+            source $BASH_ENV
+
+      - run:
+          name: "build and push"
+          command: |
+            export COMMIT_TAG="${DOCKER_REPOSITORY}:${CIRCLE_SHA1}-${ENV}"
+            export TAG_LATEST="${DOCKER_REPOSITORY}:latest-${ENV}"
+            docker build -t $TAG_LATEST -t $COMMIT_TAG .
+            docker push $TAG_LATEST
+            docker push $COMMIT_TAG
+  deploy:
+    docker:
+      - image: circleci/python:3.6.6-stretch-browsers
+    steps:
+      - <<: *install-environment-requirements
+      - checkout
+      - run:
+          name: "Connect to cluster"
+          command: |
+            export KUBECONFIG="/tmp/kubeconfig"
+            kubectl config --kubeconfig=/tmp/kubeconfig set-cluster cluster --server=$K8S_CLUSTER_IP --insecure-skip-tls-verify
+            kubectl config --kubeconfig=/tmp/kubeconfig set-credentials $K8S_USERNAME --token=$K8S_TOKEN
+            kubectl config --kubeconfig=/tmp/kubeconfig set-context deploy --cluster=cluster --user=$K8S_USERNAME
+            kubectl config --kubeconfig=/tmp/kubeconfig use-context deploy
+            kubectl config --kubeconfig=/tmp/kubeconfig view
+      - run:
+          name: "Prepare Environment"
+          command: |
+            if [ ${CIRCLE_BRANCH} == "master" ]
+            then
+              echo "export ENV=production" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            else
+              echo "export ENV=staging" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            fi
+      - run:
+          name: Deploy
+          command: |
+            export IMAGE_REPO_URL="${DOCKER_REPOSITORY}:${CIRCLE_SHA1}-${ENV}"
+            export PORT=3000
+            envsubst < .infra/deployment.yaml > output.yaml
+            kubectl config --kubeconfig=/tmp/kubeconfig use-context deploy
+
+            kubectl --kubeconfig=/tmp/kubeconfig version
+            kubectl config --kubeconfig=/tmp/kubeconfig current-context
+
+            kubectl delete --kubeconfig=/tmp/kubeconfig secret $SERVICE_NAME --namespace $K8S_NAMESPACE
+
+            source $BASH_ENV
+            env > .env
+            kubectl create --kubeconfig=/tmp/kubeconfig secret generic $SERVICE_NAME --from-env-file=.env --namespace $K8S_NAMESPACE
+            kubectl apply --kubeconfig=/tmp/kubeconfig -f output.yaml
+
+  deploy-function:
+    docker:
+      - image: circleci/python:3.6.6-stretch-browsers
+    steps:
+      - <<: *install-environment-requirements
+      - <<: *install-kubeless
+      - checkout
+      - run:
+          name: "Connect to cluster"
+          command: |
+            export KUBECONFIG="/tmp/kubeconfig"
+            kubectl config --kubeconfig=/tmp/kubeconfig set-cluster cluster --server=$K8S_CLUSTER_IP --insecure-skip-tls-verify
+            kubectl config --kubeconfig=/tmp/kubeconfig set-credentials $K8S_USERNAME --token=$K8S_TOKEN
+            kubectl config --kubeconfig=/tmp/kubeconfig set-context deploy --cluster=cluster --user=$K8S_USERNAME
+            kubectl config --kubeconfig=/tmp/kubeconfig use-context deploy
+            kubectl config --kubeconfig=/tmp/kubeconfig view
+      - run:
+          name: "Prepare Environment"
+          command: |
+            if [ ${CIRCLE_BRANCH} == "master" ]
+            then
+              echo "export ENV=production" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            else
+              echo "export ENV=staging" >> $BASH_ENV
+              echo "export DEBUG=False" >> $BASH_ENV
+            fi
+      - run:
+          name: Deploy
+          command: |
+            npm run build
+            kubeless function deploy $KUBELESS_FUNCTION_NAME --runtime $KUBELESS_RUNTIME --dependencies package.json --handler index.start --from-file dist/index.js
+            kubeless trigger kafka create $KUBELESS_FUNCTION_NAME --function-selector created-by=kubeless,function=$KUBELESS_FUNCTION_NAME --trigger-topic $KUBELESS_TOPIC_NAME
+workflows:
+  version: 2
+  production:
+    jobs:
+      # - test:
+      #     context: production
+      #     filters:
+      #       branches:
+      #         only: 
+      #           - master
+      - deploy-function:
+          context: production
+          filters:
+            branches:
+              only: 
+                - master
