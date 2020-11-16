@@ -151,12 +151,12 @@ jobs:
       - run:
           name: "Connect to cluster"
           command: |
-            export KUBECONFIG="/tmp/kubeconfig"
-            kubectl config --kubeconfig=/tmp/kubeconfig set-cluster cluster --server=$K8S_CLUSTER_IP --insecure-skip-tls-verify
-            kubectl config --kubeconfig=/tmp/kubeconfig set-credentials $K8S_USERNAME --token=$K8S_TOKEN
-            kubectl config --kubeconfig=/tmp/kubeconfig set-context deploy --cluster=cluster --user=$K8S_USERNAME
-            kubectl config --kubeconfig=/tmp/kubeconfig use-context deploy
-            kubectl config --kubeconfig=/tmp/kubeconfig view
+            export KUBECONFIG="/home/circleci/.kube/config"
+            kubectl config --kubeconfig=/home/circleci/.kube/config set-cluster cluster --server=$K8S_CLUSTER_IP --insecure-skip-tls-verify
+            kubectl config --kubeconfig=/home/circleci/.kube/config set-credentials $K8S_USERNAME --token=$K8S_TOKEN
+            kubectl config --kubeconfig=/home/circleci/.kube/config set-context deploy --cluster=cluster --user=$K8S_USERNAME
+            kubectl config --kubeconfig=/home/circleci/.kube/config use-context deploy
+            kubectl config --kubeconfig=/home/circleci/.kube/config view
       - run:
           name: "Prepare Environment"
           command: |
