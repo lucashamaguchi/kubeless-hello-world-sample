@@ -35,7 +35,7 @@ aliases:
         sudo curl -OL https://github.com/kubeless/kubeless/releases/download/$RELEASE/kubeless_$OS-amd64.zip && \
           sudo unzip kubeless_$OS-amd64.zip && \
           sudo mv bundles/kubeless_$OS-amd64/kubeless /usr/local/bin/
-        sudo rm -f kubeless_$OS-amd64.zip bundles
+        sudo rm -rf kubeless_$OS-amd64.zip bundles
 defaults: &defaults
   docker:
     - image: circleci/python:3.6.6-stretch-browsers
