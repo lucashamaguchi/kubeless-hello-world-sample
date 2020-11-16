@@ -197,7 +197,7 @@ jobs:
             kubeless trigger kafka create $KUBELESS_FUNCTION_NAME \
               --function-selector created-by=kubeless,function=$KUBELESS_FUNCTION_NAME \
               --namespace $K8S_NAMESPACE \
-              --trigger-topic $KUBELESS_TOPIC_NAME  || 0
+              --trigger-topic $KUBELESS_TOPIC_NAME || true
 workflows:
   version: 2
   production:
