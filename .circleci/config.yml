@@ -36,6 +36,12 @@ aliases:
           sudo unzip kubeless_$OS-amd64.zip && \
           sudo mv bundles/kubeless_$OS-amd64/kubeless /usr/local/bin/
         sudo rm -rf kubeless_$OS-amd64.zip bundles
+  - &install-node
+    run:
+      name: Install node
+      command: |
+        sudo curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+        sudo apt-get install -y nodejs
 defaults: &defaults
   docker:
     - image: circleci/python:3.6.6-stretch-browsers
@@ -136,10 +142,11 @@ jobs:
 
   deploy-function:
     docker:
-      - image: node:12.19.1-buster-slim
+      - image: circleci/node:3.6.6-stretch-browsers
     steps:
       - <<: *install-environment-requirements
       - <<: *install-kubeless
+      - <<: *install-node
       - checkout
       - run:
           name: "Connect to cluster"
